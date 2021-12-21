@@ -1,10 +1,11 @@
-node_addr = "http://127.0.0.1:4467"
-database_url = "postgresql://etlite:password@127.0.0.1/helium_lite"
+node_addr = "http://blockchain-node:4467"
+database_url = "postgresql://postgres:postgres@db/postgres"
 # "rewards"    - load all rewards 
 # "full"       - load all rewards & challenges 
 # "filters"    - load only rewards or challenges associated with accounts or gateways 
 #								 listed below in filters
-mode = "rewards"
+
+mode = "filters"
 
 
 # "true" or "false" 
@@ -13,4 +14,4 @@ mode = "rewards"
 backfill = "true"
 
 [log]
-log_dir = "log"
+log_dir = "/opt/etl-lite"
