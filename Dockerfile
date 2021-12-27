@@ -1,22 +1,26 @@
-FROM ubuntu as deps-compiler
 FROM ubuntu:focal
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt update && apt install -y \
     git tar autoconf automake libtool build-essential \
     bzip2 bison flex cmake lz4 libsodium-dev \
-    sed curl cargo
+    sed curl cargo python3 python3-pip vim
+
+WORKDIR /opt/etl-lite
+COPY requirements.txt ./
+RUN pip install -r requirements.txt
 
 # Install Rust toolchain
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
-WORKDIR /opt/etl-lite
 
 ENV CC=gcc CXX=g++ \
     PATH="/root/.cargo/bin:/opt/etl-lite/target/release:$PATH"
 
-# Now add our code without config so we don't need to recompile every time we
-# modify config
+# Now add our code without entrypoint python script so we don't need to
+# recompile blockchain node binary every time we modify entrypoint (which
+# generates config on the fly)
+
 COPY src src/
 COPY migrations migrations/
 COPY Cargo.toml .
@@ -24,13 +28,10 @@ COPY Cargo.toml .
 # Compile code 
 RUN cargo build --release
 
-# RUN DIAGNOSTIC=1 ./rebar3 as ${BUILD_TARGET} tar -v ${VERSION} -n blockchain_node \
-#         && mkdir -p /opt/docker \
-#         && tar -zxvf _build/${BUILD_TARGET}/rel/*/*.tar.gz -C /opt/docker
-COPY config config/
+# Add entrypoint after blockchain node follower has been compiled
+RUN mkdir config
+COPY entrypoint.py .
 
-
-#RUN ln -sf /config /opt/node/releases/$VERSION
-
-ENTRYPOINT ["helium_etl_lite"]
-CMD ["help"]
+ENTRYPOINT "/bin/bash"
+# ENTRYPOINT ["python3", "entrypoint.py"]
+# CMD ["run", "--migrate"]
