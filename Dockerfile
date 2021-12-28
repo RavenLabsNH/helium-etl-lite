@@ -32,6 +32,5 @@ RUN cargo build --release
 RUN mkdir config
 COPY entrypoint.py .
 
-ENTRYPOINT "/bin/bash"
-# ENTRYPOINT ["python3", "entrypoint.py"]
-# CMD ["run", "--migrate"]
+ENTRYPOINT ["python3", "entrypoint.py"]
+CMD ["run", "--migrate", "--mode", "full", "--backfill"]
