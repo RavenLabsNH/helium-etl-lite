@@ -7,8 +7,6 @@ RUN apt update && apt install -y \
     sed curl cargo python3 python3-pip vim
 
 WORKDIR /opt/etl-lite
-COPY requirements.txt ./
-RUN pip install -r requirements.txt
 
 # Install Rust toolchain
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -28,9 +26,13 @@ COPY Cargo.toml .
 # Compile code 
 RUN cargo build --release
 
+# Install python dependencies for wrapper script
+COPY requirements.txt ./
+RUN pip install -r requirements.txt
+
 # Add entrypoint after blockchain node follower has been compiled
 RUN mkdir config
 COPY entrypoint.py .
 
 ENTRYPOINT ["python3", "entrypoint.py"]
-CMD ["run", "--migrate", "--mode", "full", "--backfill"]
+CMD ["run", "--migrate", "--mode", "filters", "--backfill"]

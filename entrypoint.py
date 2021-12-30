@@ -13,8 +13,10 @@ import socket
 import traceback
 import argparse
 import subprocess
+import psycopg2
 import toml
 import json
+from psycopg2.extras import execute_values
 
 DB_CREDS_ENV_VAR = "FLAVORSCLUSTER_SECRET"
 BLOCKCHAIN_NODE_SVC_NAME = "blockchain-node"
@@ -123,6 +125,50 @@ def check_remote_port_with_retry(
         raise RuntimeError(msg)
 
 
+def write_filters_to_db(conf, svc_info):
+    """
+    Write accounts and gateway addresses to filters table of DB
+    """
+    mode = conf["mode"]
+    accounts = os.getenv("ACCOUNT_ADDRESSES")
+    gateways = os.getenv("GATEWAY_ADDRESSES")
+    if mode == "filters" and not (accounts or gateways):
+        print(
+            "WARNING: Running in filters mode but neither ACCOUNT_ADDRESSES or GATEWAY_ADDRESSES env vars are set"
+        )
+        return False
+    db_conn_keys = {
+        "host": "host",
+        "port": "port",
+        "password": "password",
+        "user": "username",
+        "dbname": "dbname",
+    }
+    db_conn_dict = {k: svc_info["db"][v] for k, v in db_conn_keys.items()}
+    if accounts:
+        accounts_list = [["account", e] for e in accounts.split(",")]
+        print("INFO: Writing accounts {} to filters table".format(accounts))
+        with psycopg2.connect(**db_conn_dict) as conn:
+            with conn.cursor() as curs:
+                execute_values(
+                    curs,
+                    "INSERT INTO public.filters (type, value) VALUES %s",
+                    accounts_list,
+                )
+    if gateways:
+        gateways_list = [["gateway", e] for e in gateways.split(",")]
+        print("INFO: Writing gateways {} to filters table".format(gateways))
+        with psycopg2.connect(**db_conn_dict) as conn:
+            with conn.cursor() as curs:
+                execute_values(
+                    curs,
+                    "INSERT INTO public.filters (type, value) VALUES %s",
+                    gateways_list,
+                )
+    print("INFO: Successfully wrote filters")
+    return True
+
+
 def run_with_returncode_passthru(args):
     """
     Run a subprocess and exit via sys.exit(proc.returncode) if the return code is
@@ -172,6 +218,7 @@ def run(args):
         )
     if args.migrate:
         run_with_returncode_passthru([ETL_BINARY_PATH, "migrate"])
+    write_filters_to_db(conf, svc_info)
     run_with_returncode_passthru([ETL_BINARY_PATH, "start"])
 
 
@@ -204,6 +251,7 @@ def migrate(args):
         check_remote_port_with_retry(
             svc_info[k]["host"], svc_info[k]["port"], retries=5, sleep_time=5
         )
+    write_filters_to_db(conf, svc_info)
     run_with_returncode_passthru([ETL_BINARY_PATH, "migrate"])
 
 
