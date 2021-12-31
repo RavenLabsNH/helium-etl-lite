@@ -16,7 +16,7 @@ import subprocess
 import psycopg2
 import toml
 import json
-from psycopg2.extras import execute_values
+from psycopg2.errors import UniqueViolation
 
 DB_CREDS_ENV_VAR = "FLAVORSCLUSTER_SECRET"
 BLOCKCHAIN_NODE_SVC_NAME = "blockchain-node"
@@ -89,6 +89,8 @@ def build_config_dict(svc_info, mode="full", backfill=True):
     if mode not in allowed_modes:
         msg = "Mode {} invalid, must be one of {}".format(mode, allowed_modes)
         raise ValueError(msg)
+    print("INFO: Using follower mode {}".format(mode))
+    print("INFO: Backfill is {}".format(backfill))
     config = {}
     config["database_url"] = svc_info["db"]["url"]
     config["node_addr"] = svc_info[BLOCKCHAIN_NODE_SVC_NAME]["url"]
@@ -99,6 +101,7 @@ def build_config_dict(svc_info, mode="full", backfill=True):
 
 
 def write_config_dict_to_toml_file(path, config):
+    print("INFO: Writing config to TOML file")
     with open(path, "w") as f:
         toml.dump(config, f)
 
@@ -150,21 +153,35 @@ def write_filters_to_db(conf, svc_info):
         print("INFO: Writing accounts {} to filters table".format(accounts))
         with psycopg2.connect(**db_conn_dict) as conn:
             with conn.cursor() as curs:
-                execute_values(
-                    curs,
-                    "INSERT INTO public.filters (type, value) VALUES %s",
-                    accounts_list,
-                )
+                for filter_type, value in accounts_list:
+                    try:
+                        curs.execute(
+                            "INSERT INTO public.filters (type, value) VALUES (%s, %s);",
+                            (filter_type, value),
+                        )
+                    except UniqueViolation as e:
+                        print(
+                            "WARNING: {} address {} already in filters table".format(
+                                filter_type, value
+                            )
+                        )
     if gateways:
         gateways_list = [["gateway", e] for e in gateways.split(",")]
         print("INFO: Writing gateways {} to filters table".format(gateways))
         with psycopg2.connect(**db_conn_dict) as conn:
             with conn.cursor() as curs:
-                execute_values(
-                    curs,
-                    "INSERT INTO public.filters (type, value) VALUES %s",
-                    gateways_list,
-                )
+                for filter_type, value in gateways_list:
+                    try:
+                        curs.execute(
+                            "INSERT INTO public.filters (type, value) VALUES (%s, %s);",
+                            (filter_type, value),
+                        )
+                    except UniqueViolation as e:
+                        print(
+                            "WARNING: {} address {} already in filters table".format(
+                                filter_type, value
+                            )
+                        )
     print("INFO: Successfully wrote filters")
     return True
 
@@ -194,7 +211,7 @@ def run_with_returncode_passthru(args):
             "--backfill",
             help="Scan the node for the oldest block it has and start loading transactions from there.",
             action="store_true",
-            default=True,
+            default=False,
         ),
         argument(
             "-M",
@@ -262,7 +279,7 @@ def migrate(args):
             "--backfill",
             help="Scan the node for the oldest block it has and start loading transactions from there.",
             action="store_true",
-            default=True,
+            default=False,
         ),
         argument(
             "-M",

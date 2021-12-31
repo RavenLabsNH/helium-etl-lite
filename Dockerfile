@@ -34,5 +34,6 @@ RUN pip install -r requirements.txt
 RUN mkdir config
 COPY entrypoint.py .
 
-ENTRYPOINT ["python3", "entrypoint.py"]
+ENTRYPOINT ["python3", "-u", "entrypoint.py"]
 CMD ["run", "--migrate", "--mode", "filters", "--backfill"]
+# CMD ["run", "--migrate", "--mode", "full"]
